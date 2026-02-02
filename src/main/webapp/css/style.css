@@ -1,0 +1,47 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f0f2f5; /* Màu nền mặc định */
+    min-height: 100vh;
+}
+body.login-page {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.login-card {
+    border: none;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.95);
+}
+.btn-login {
+    background: linear-gradient(to right, #667eea, #764ba2);
+    border: none;
+    transition: transform 0.2s;
+}
+.btn-login:hover {
+    transform: scale(1.02);
+    opacity: 0.9;
+}
+.navbar-custom {
+    background: linear-gradient(90deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+}
+.table-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    background: white;
+    overflow: hidden;
+}
+.table thead th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    padding: 15px;
+}
+.avatar-circle {
+    width: 40px; height: 40px;
+    background-color: #e9ecef;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: bold; margin-right: 10px;
+}
