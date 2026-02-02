@@ -145,9 +145,7 @@
 </div>
 
 <script>
-    // Hàm JS xuất Excel giữ nguyên
     function exportTableToExcel(tableID, filename = ''){
-        // ... (Code JS giữ nguyên như cũ) ...
         let downloadLink;
         let dataType = 'application/vnd.ms-excel';
         let tableSelect = document.getElementById(tableID);
