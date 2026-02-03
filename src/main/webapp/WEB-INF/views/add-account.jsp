@@ -1,4 +1,4 @@
-<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ page contentType="text/html;charset=UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
 
@@ -121,9 +121,9 @@
 
 <script>
     function toggleFields() {
-        var type = document.getElementById("typeSelect").value;
-        var savingsDiv = document.getElementById("savingsFields");
-        var paymentDiv = document.getElementById("paymentFields");
+        let type = document.getElementById("typeSelect").value;
+        let savingsDiv = document.getElementById("savingsFields");
+        let paymentDiv = document.getElementById("paymentFields");
 
         if (type === "SAVINGS") {
             savingsDiv.style.display = "block";
