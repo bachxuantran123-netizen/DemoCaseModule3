@@ -43,73 +43,51 @@ public class AccountServlet extends HttpServlet {
         }
     }
 
-    private void showEditForm(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String code = request.getParameter("code");
-        BankAccount existingAccount = accountDAO.getAccountByCode(code);
-
-        if (existingAccount == null) {
-            response.sendRedirect("account");
-            return;
-        }
-        request.setAttribute("account", existingAccount);
-        RequestDispatcher dispatcher = request.getRequestDispatcher("WEB-INF/views/add-account.jsp");
-        dispatcher.forward(request, response);
-    }
-
-    @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        req.setCharacterEncoding("UTF-8");
-
-        String action = req.getParameter("action");
-        if (action == null) action = "list";
-
-        switch (action) {
-            case "insert":
-                insertAccount(req, resp);
-                break;
-            case "update":
-                updateAccount(req, resp);
-                break;
-            default:
-                resp.sendRedirect("account");
-                break;
-        }
-    }
-
     private void listAccounts(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        // --- PHẦN 1: PHÂN TRANG TÀI KHOẢN (Param: "page") ---
         int accPage = 1;
-        int accSize = 5;
+        int accSize = 10;
+
         if (request.getParameter("page") != null) {
-            try { accPage = Integer.parseInt(request.getParameter("page")); } catch (NumberFormatException e) {}
+            try {
+                accPage = Integer.parseInt(request.getParameter("page"));
+                if (accPage < 1) accPage = 1;
+            } catch (NumberFormatException e) {
+                accPage = 1;
+            }
         }
         int totalAccounts = accountDAO.countTotalAccounts();
         int totalAccPages = (int) Math.ceil((double) totalAccounts / accSize);
+        if (totalAccPages == 0) totalAccPages = 1;
+
         List<BankAccount> list = accountDAO.getAccountsByPage(accPage, accSize);
 
         request.setAttribute("listAccounts", list);
-        request.setAttribute("currentAccPage", accPage); // Đổi tên biến cho rõ
+        request.setAttribute("currentAccPage", accPage);
         request.setAttribute("totalAccPages", totalAccPages);
 
-        // --- PHẦN 2: PHÂN TRANG LOG (Param: "logPage") ---
         HttpSession session = request.getSession();
         String role = (String) session.getAttribute("role");
 
-        // Mặc định logPage = 1
         int logPage = 1;
-        int logSize = 5; // Số log mỗi trang
+        int logSize = 10;
+
         int totalLogPages = 0;
 
         if ("ADMIN".equalsIgnoreCase(role)) {
-            // Chỉ xử lý nếu là Admin
             if (request.getParameter("logPage") != null) {
-                try { logPage = Integer.parseInt(request.getParameter("logPage")); } catch (NumberFormatException e) {}
+                try {
+                    logPage = Integer.parseInt(request.getParameter("logPage"));
+                    if (logPage < 1) logPage = 1;
+                } catch (NumberFormatException e) {
+                    logPage = 1;
+                }
             }
 
             int totalLogs = accountDAO.countTotalLogs();
             totalLogPages = (int) Math.ceil((double) totalLogs / logSize);
+            if (totalLogPages == 0) totalLogPages = 1;
 
-            List<src.Entities.ActivityLog> logs = accountDAO.getLogsByPage(logPage, logSize);
+            List<ActivityLog> logs = accountDAO.getLogsByPage(logPage, logSize);
             request.setAttribute("systemLogs", logs);
         }
 
@@ -123,6 +101,8 @@ public class AccountServlet extends HttpServlet {
         String keyword = request.getParameter("keyword");
         List<BankAccount> list = accountDAO.searchAccounts(keyword);
         request.setAttribute("listAccounts", list);
+        request.setAttribute("currentAccPage", 1);
+        request.setAttribute("totalAccPages", 1);
         request.getRequestDispatcher("/WEB-INF/views/dashboard.jsp").forward(request, response);
     }
 
@@ -130,16 +110,39 @@ public class AccountServlet extends HttpServlet {
         request.getRequestDispatcher("/WEB-INF/views/add-account.jsp").forward(request, response);
     }
 
+    private void showEditForm(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String code = request.getParameter("code");
+        BankAccount existingAccount = accountDAO.getAccountByCode(code);
+        if (existingAccount == null) {
+            response.sendRedirect("account");
+            return;
+        }
+        request.setAttribute("account", existingAccount);
+        request.getRequestDispatcher("WEB-INF/views/add-account.jsp").forward(request, response);
+    }
+
     private void deleteAccount(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String code = request.getParameter("code");
-        HttpSession session = request.getSession();
-        String currentUser = (String) session.getAttribute("user");
+        String currentUser = (String) request.getSession().getAttribute("user");
         try {
             accountDAO.deleteAccount(code, currentUser);
         } catch (Exception e) {
             e.printStackTrace();
         }
         response.sendRedirect("account");
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        req.setCharacterEncoding("UTF-8");
+        String action = req.getParameter("action");
+        if (action == null) action = "list";
+
+        switch (action) {
+            case "insert": insertAccount(req, resp); break;
+            case "update": updateAccount(req, resp); break;
+            default: resp.sendRedirect("account"); break;
+        }
     }
 
     private void insertAccount(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
@@ -163,7 +166,6 @@ public class AccountServlet extends HttpServlet {
             }
 
             BankAccount acc = null;
-
             if ("SAVINGS".equals(type)) {
                 String depositStr = request.getParameter("depositAmount");
                 String dateStr = request.getParameter("depositDate");
@@ -186,12 +188,9 @@ public class AccountServlet extends HttpServlet {
                 double amount = Double.parseDouble(depositStr.replace(",", ""));
                 double rate = Double.parseDouble(rateStr.replace(",", ""));
                 int term = Integer.parseInt(termStr);
+                String finalDate = DateUtils.convertToSqlDate(dateStr).toString();
 
-                java.sql.Date sqlDate = DateUtils.convertToSqlDate(dateStr);
-                String finalDateString = sqlDate.toString();
-
-                acc = new SavingsAccount(0, code, 0, name, cid, finalDateString, amount, finalDateString, rate, term);
-
+                acc = new SavingsAccount(0, code, 0, name, cid, finalDate, amount, finalDate, rate, term);
             } else {
                 String cardNum = request.getParameter("cardNumber");
                 String balanceStr = request.getParameter("balance");
@@ -205,19 +204,16 @@ public class AccountServlet extends HttpServlet {
                 acc = new PaymentAccount(0, code, 0, name, cid, today, cardNum, balance);
             }
 
-            HttpSession session = request.getSession();
-            String currentUser = (String) session.getAttribute("user");
-
+            String currentUser = (String) request.getSession().getAttribute("user");
             if (accountDAO.addAccount(acc, currentUser)) {
                 response.sendRedirect("account");
             } else {
                 request.setAttribute("error", "Lỗi Database!");
                 showNewForm(request, response);
             }
-
         } catch (Exception e) {
             e.printStackTrace();
-            request.setAttribute("error", "Lỗi nhập liệu: " + e.getMessage());
+            request.setAttribute("error", "Lỗi: " + e.getMessage());
             showNewForm(request, response);
         }
     }
@@ -234,7 +230,6 @@ public class AccountServlet extends HttpServlet {
             }
 
             BankAccount account = null;
-
             if ("SAVINGS".equals(type)) {
                 String depositStr = req.getParameter("depositAmount");
                 String dateStr = req.getParameter("depositDate");
@@ -257,12 +252,9 @@ public class AccountServlet extends HttpServlet {
                 double deposit = Double.parseDouble(depositStr.replace(",", ""));
                 double rate = Double.parseDouble(rateStr.replace(",", ""));
                 int term = Integer.parseInt(termStr);
+                String finalDate = DateUtils.convertToSqlDate(dateStr).toString();
 
-                java.sql.Date sqlDate = DateUtils.convertToSqlDate(dateStr);
-                String finalDateString = sqlDate.toString();
-
-                account = new SavingsAccount(0, code, 0, name, citizenId, finalDateString, deposit, finalDateString, rate, term);
-
+                account = new SavingsAccount(0, code, 0, name, citizenId, finalDate, deposit, finalDate, rate, term);
             } else if ("PAYMENT".equals(type)) {
                 String card = req.getParameter("cardNumber");
                 String balanceStr = req.getParameter("balance");

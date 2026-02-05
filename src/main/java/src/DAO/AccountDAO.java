@@ -4,8 +4,8 @@ import src.Database.DatabaseConnection;
 import src.Entities.BankAccount;
 import src.Entities.PaymentAccount;
 import src.Entities.SavingsAccount;
+import src.Entities.ActivityLog;
 import src.Exceptions.NotFoundBankAccountException;
-import src.Utils.DateUtils;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -75,81 +75,107 @@ public class AccountDAO {
         return list;
     }
 
+    public int countTotalAccounts() {
+        String sql = "SELECT COUNT(*) FROM Accounts";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) { e.printStackTrace(); }
+        return 0;
+    }
+
+    public List<BankAccount> getAccountsByPage(int pageIndex, int pageSize) {
+        List<BankAccount> list = new ArrayList<>();
+        int offset = (pageIndex - 1) * pageSize;
+        if (offset < 0) offset = 0; // An toàn
+
+        String sql = "SELECT a.*, c.full_name, c.citizen_id FROM Accounts a " +
+                "JOIN Customers c ON a.customer_id = c.customer_id " +
+                "ORDER BY a.creation_date DESC " +
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, offset);
+            ps.setInt(2, pageSize);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) list.add(mapRowToAccount(rs));
+        } catch (SQLException e) { e.printStackTrace(); }
+        return list;
+    }
+
     public boolean addAccount(BankAccount acc, String currentAdmin) {
         Connection conn = null;
-        PreparedStatement psCheck = null;
-        PreparedStatement psInsCust = null;
-        PreparedStatement psAcc = null;
-        PreparedStatement psLog = null;
-        ResultSet rsCheck = null;
-        ResultSet rsKey = null;
-
         try {
             conn = DatabaseConnection.getConnection();
             conn.setAutoCommit(false);
 
             int customerId = -1;
             String checkCust = "SELECT customer_id FROM Customers WHERE citizen_id = ?";
-            psCheck = conn.prepareStatement(checkCust);
-            psCheck.setString(1, acc.getCitizenId());
-            rsCheck = psCheck.executeQuery();
-
-            if (rsCheck.next()) {
-                customerId = rsCheck.getInt("customer_id");
-            } else {
-                String insertCust = "INSERT INTO Customers (citizen_id, full_name) VALUES (?, ?)";
-                psInsCust = conn.prepareStatement(insertCust, Statement.RETURN_GENERATED_KEYS);
-                psInsCust.setString(1, acc.getCitizenId());
-                psInsCust.setString(2, acc.getOwnerName());
-                psInsCust.executeUpdate();
-
-                rsKey = psInsCust.getGeneratedKeys();
-                if (rsKey.next()) customerId = rsKey.getInt(1);
+            try (PreparedStatement psCheck = conn.prepareStatement(checkCust)) {
+                psCheck.setString(1, acc.getCitizenId());
+                ResultSet rsCheck = psCheck.executeQuery();
+                if (rsCheck.next()) {
+                    customerId = rsCheck.getInt("customer_id");
+                } else {
+                    String insertCust = "INSERT INTO Customers (citizen_id, full_name) VALUES (?, ?)";
+                    try (PreparedStatement psInsCust = conn.prepareStatement(insertCust, Statement.RETURN_GENERATED_KEYS)) {
+                        psInsCust.setString(1, acc.getCitizenId());
+                        psInsCust.setString(2, acc.getOwnerName());
+                        psInsCust.executeUpdate();
+                        ResultSet rsKey = psInsCust.getGeneratedKeys();
+                        if (rsKey.next()) customerId = rsKey.getInt(1);
+                    }
+                }
             }
 
             String sqlAcc = "INSERT INTO Accounts (account_code, customer_id, creation_date, type, " +
                     "deposit_amount, deposit_date, interest_rate, term, card_number, balance) " +
                     "VALUES (?, ?, GETDATE(), ?, ?, ?, ?, ?, ?, ?)";
+            try (PreparedStatement psAcc = conn.prepareStatement(sqlAcc)) {
+                psAcc.setString(1, acc.getAccountCode());
+                psAcc.setInt(2, customerId);
 
-            psAcc = conn.prepareStatement(sqlAcc);
-            psAcc.setString(1, acc.getAccountCode());
-            psAcc.setInt(2, customerId);
-
-            if (acc instanceof SavingsAccount) {
-                SavingsAccount sa = (SavingsAccount) acc;
-                psAcc.setString(3, "SavingsAccount");
-                psAcc.setDouble(4, sa.getDepositAmount());
-                psAcc.setDate(5, new java.sql.Date(System.currentTimeMillis()));
-                psAcc.setDouble(6, sa.getInterestRate());
-                psAcc.setInt(7, sa.getTerm());
-                psAcc.setNull(8, Types.VARCHAR);
-                psAcc.setNull(9, Types.DOUBLE);
-            } else {
-                PaymentAccount pa = (PaymentAccount) acc;
-                psAcc.setString(3, "PaymentAccount");
-                psAcc.setNull(4, Types.DOUBLE);
-                psAcc.setNull(5, Types.DATE);
-                psAcc.setNull(6, Types.DOUBLE);
-                psAcc.setNull(7, Types.INTEGER);
-                psAcc.setString(8, pa.getCardNumber());
-                psAcc.setDouble(9, pa.getBalance());
+                if (acc instanceof SavingsAccount) {
+                    SavingsAccount sa = (SavingsAccount) acc;
+                    psAcc.setString(3, "SavingsAccount");
+                    psAcc.setDouble(4, sa.getDepositAmount());
+                    psAcc.setDate(5, new java.sql.Date(System.currentTimeMillis()));
+                    psAcc.setDouble(6, sa.getInterestRate());
+                    psAcc.setInt(7, sa.getTerm());
+                    psAcc.setNull(8, Types.VARCHAR);
+                    psAcc.setNull(9, Types.DOUBLE);
+                } else {
+                    PaymentAccount pa = (PaymentAccount) acc;
+                    psAcc.setString(3, "PaymentAccount");
+                    psAcc.setNull(4, Types.DOUBLE);
+                    psAcc.setNull(5, Types.DATE);
+                    psAcc.setNull(6, Types.DOUBLE);
+                    psAcc.setNull(7, Types.INTEGER);
+                    psAcc.setString(8, pa.getCardNumber());
+                    psAcc.setDouble(9, pa.getBalance());
+                }
+                psAcc.executeUpdate();
             }
-            psAcc.executeUpdate();
-            String sqlLog = "INSERT INTO ActivityLogs (username, action, log_time) VALUES (?, ?, GETDATE())";
-            psLog = conn.prepareStatement(sqlLog);
-            psLog.setString(1, currentAdmin);
-            psLog.setString(2, "Thêm tài khoản mới " + acc.getAccountCode());
-            psLog.executeUpdate();
+
+            logActivity(conn, currentAdmin, "Thêm tài khoản mới " + acc.getAccountCode());
 
             conn.commit();
             return true;
-
         } catch (Exception e) {
-            try { if (conn != null) conn.rollback(); } catch (SQLException ex) {}
+            try {
+                if (conn != null)
+                    conn.rollback();
+            } catch (SQLException ex) {}
             e.printStackTrace();
             return false;
         } finally {
-            closeResources(rsKey, rsCheck, psLog, psAcc, psInsCust, psCheck, conn);
+            try {
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (Exception e) {}
         }
     }
 
@@ -192,38 +218,28 @@ public class AccountDAO {
             String sqlAcc = "UPDATE Accounts SET customer_id=?, deposit_amount=?, interest_rate=?, term=?, card_number=?, balance=? WHERE account_code=?";
 
             try (PreparedStatement pstmt = conn.prepareStatement(sqlAcc)) {
-                pstmt.setInt(1, customerId);
-
                 if (acc instanceof SavingsAccount) {
                     SavingsAccount sa = (SavingsAccount) acc;
-                    pstmt.setDouble(2, sa.getDepositAmount());
-                    pstmt.setDouble(3, sa.getInterestRate());
-                    pstmt.setInt(4, sa.getTerm());
-                    pstmt.setNull(5, Types.VARCHAR);
-                    pstmt.setNull(6, Types.DOUBLE);
+                    pstmt.setDouble(1, sa.getDepositAmount());
+                    pstmt.setDouble(2, sa.getInterestRate());
+                    pstmt.setInt(3, sa.getTerm());
+                    pstmt.setNull(4, Types.VARCHAR);
+                    pstmt.setNull(5, Types.DOUBLE);
                 } else {
                     PaymentAccount pa = (PaymentAccount) acc;
+                    pstmt.setNull(1, Types.DOUBLE);
                     pstmt.setNull(2, Types.DOUBLE);
-                    pstmt.setNull(3, Types.DOUBLE);
-                    pstmt.setNull(4, Types.INTEGER);
-                    pstmt.setString(5, pa.getCardNumber());
-                    pstmt.setDouble(6, pa.getBalance());
+                    pstmt.setNull(3, Types.INTEGER);
+                    pstmt.setString(4, pa.getCardNumber());
+                    pstmt.setDouble(5, pa.getBalance());
                 }
-                pstmt.setString(7, acc.getAccountCode());
-
+                pstmt.setString(6, acc.getAccountCode());
                 pstmt.executeUpdate();
             }
 
-            String sqlLog = "INSERT INTO ActivityLogs (username, action, log_time) VALUES (?, ?, GETDATE())";
-            try (PreparedStatement pLog = conn.prepareStatement(sqlLog)) {
-                pLog.setString(1, currentAdmin);
-                pLog.setString(2, "Cập nhật tài khoản " + acc.getAccountCode() + " (CCCD: " + acc.getCitizenId() + ")");
-                pLog.executeUpdate();
-            }
-
+            logActivity(conn, currentAdmin, "Cập nhật tài khoản " + acc.getAccountCode());
             conn.commit();
             return true;
-
         } catch (Exception e) {
             try {
                 if (conn != null)
@@ -233,10 +249,8 @@ public class AccountDAO {
             return false;
         } finally {
             try {
-                if (conn != null)
-                { conn.setAutoCommit(true);
+                if (conn != null) 
                     conn.close();
-                }
             } catch (Exception e) {}
         }
     }
@@ -250,15 +264,10 @@ public class AccountDAO {
             String sqlDel = "DELETE FROM Accounts WHERE account_code = ?";
             try (PreparedStatement pstmt = conn.prepareStatement(sqlDel)) {
                 pstmt.setString(1, code);
-                if (pstmt.executeUpdate() == 0) throw new NotFoundBankAccountException("Không tìm thấy tài khoản để xóa!");
+                if (pstmt.executeUpdate() == 0) throw new NotFoundBankAccountException("Không tìm thấy tài khoản!");
             }
 
-            String sqlLog = "INSERT INTO ActivityLogs (username, action, log_time) VALUES (?, ?, GETDATE())";
-            try (PreparedStatement pLog = conn.prepareStatement(sqlLog)) {
-                pLog.setString(1, currentAdmin);
-                pLog.setString(2, "Đã xóa tài khoản " + code);
-                pLog.executeUpdate();
-            }
+            logActivity(conn, currentAdmin, "Đã xóa tài khoản " + code);
             conn.commit();
         } catch (SQLException e) {
             try {
@@ -268,21 +277,18 @@ public class AccountDAO {
             e.printStackTrace();
         } finally {
             try {
-                if (conn != null) {
-                    conn.setAutoCommit(true);
+                if (conn != null)
                     conn.close();
-                }
             } catch (Exception e) {}
         }
     }
 
-    private void closeResources(AutoCloseable... resources) {
-        for (AutoCloseable resource : resources) {
-            if (resource != null) {
-                try {
-                    resource.close();
-                } catch (Exception e) {}
-            }
+    private void logActivity(Connection conn, String user, String action) throws SQLException {
+        String sql = "INSERT INTO ActivityLogs (username, action, log_time) VALUES (?, ?, GETDATE())";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, user);
+            ps.setString(2, action);
+            ps.executeUpdate();
         }
     }
 
@@ -299,87 +305,19 @@ public class AccountDAO {
     }
 
     public BankAccount getAccountByCode(String code) {
-        String sql = "SELECT a.*, c.full_name, c.citizen_id " +
-                "FROM Accounts a " +
-                "JOIN Customers c ON a.customer_id = c.customer_id " +
-                "WHERE a.account_code = ?";
-
+        String sql = "SELECT a.*, c.full_name, c.citizen_id FROM Accounts a " +
+                "JOIN Customers c ON a.customer_id = c.customer_id WHERE a.account_code = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
             pstmt.setString(1, code);
             ResultSet rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                return mapRowToAccount(rs);
-            }
+            if (rs.next()) return mapRowToAccount(rs);
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return null;
     }
-    public int countTotalAccounts() {
-        String sql = "SELECT COUNT(*) FROM Accounts";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) return rs.getInt(1);
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return 0;
-    }
 
-    // 2. Lấy danh sách có phân trang (OFFSET - FETCH)
-    public List<BankAccount> getAccountsByPage(int pageIndex, int pageSize) {
-        List<BankAccount> list = new ArrayList<>();
-        // Công thức: Bỏ qua (page-1)*size dòng, lấy size dòng tiếp theo
-        int offset = (pageIndex - 1) * pageSize;
-
-        String sql = "SELECT a.*, c.full_name, c.citizen_id " +
-                "FROM Accounts a " +
-                "JOIN Customers c ON a.customer_id = c.customer_id " +
-                "ORDER BY a.creation_date DESC " + // Bắt buộc phải có ORDER BY mới dùng được OFFSET
-                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, offset);
-            ps.setInt(2, pageSize);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                list.add(mapRowToAccount(rs)); // Dùng lại hàm mapRowToAccount cũ của bạn
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return list;
-    }
-
-    // 3. Lấy danh sách Log (Chỉ lấy 20 log mới nhất)
-    // Sửa lại hàm này trong AccountDAO.java
-    public List<src.Entities.ActivityLog> getRecentLogs() {
-        List<src.Entities.ActivityLog> logs = new ArrayList<>();
-
-        // Cập nhật SQL: Chọn rõ ràng các cột để tránh nhầm lẫn
-        String sql = "SELECT TOP 20 log_id, username, action, log_time FROM ActivityLogs ORDER BY log_time DESC";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                logs.add(new src.Entities.ActivityLog(
-                        rs.getInt("log_id"), // <-- SỬA CHỖ NÀY: Dùng "log_id" thay vì "id"
-                        rs.getString("username"),
-                        rs.getString("action"),
-                        rs.getTimestamp("log_time")
-                ));
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return logs;
-    }
     public int countTotalLogs() {
         String sql = "SELECT COUNT(*) FROM ActivityLogs";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -392,25 +330,20 @@ public class AccountDAO {
         return 0;
     }
 
-    // 2. Lấy Log có phân trang (Thay thế hàm getRecentLogs cũ)
-    public List<src.Entities.ActivityLog> getLogsByPage(int pageIndex, int pageSize) {
-        List<src.Entities.ActivityLog> logs = new ArrayList<>();
+    public List<ActivityLog> getLogsByPage(int pageIndex, int pageSize) {
+        List<ActivityLog> logs = new ArrayList<>();
         int offset = (pageIndex - 1) * pageSize;
+        if (offset < 0) offset = 0;
 
-        // Lưu ý: Dùng "log_id" cho khớp với DB cũ của bạn
-        String sql = "SELECT log_id, username, action, log_time " +
-                "FROM ActivityLogs " +
-                "ORDER BY log_time DESC " +
-                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
-
+        String sql = "SELECT log_id, username, action, log_time FROM ActivityLogs " +
+                "ORDER BY log_time DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, offset);
             ps.setInt(2, pageSize);
-
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                logs.add(new src.Entities.ActivityLog(
+                logs.add(new ActivityLog(
                         rs.getInt("log_id"),
                         rs.getString("username"),
                         rs.getString("action"),
