@@ -137,6 +137,56 @@
                             </td>
                         </tr>
                     </c:forEach>
+                    <c:if test="${sessionScope.role == 'ADMIN'}">
+                        <div class="card table-card mt-5 mb-5 border-danger">
+                            <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-shield-lock-fill"></i> NHẬT KÝ HOẠT ĐỘNG</span>
+                                <span class="badge bg-white text-danger">Trang ${currentLogPage}/${totalLogPages}</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <table class="table table-sm table-striped mb-0">
+                                    <thead class="table-light">
+                                    <tr>
+                                        <th>Thời gian</th>
+                                        <th>Người dùng</th>
+                                        <th>Hành động</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <c:forEach var="log" items="${systemLogs}">
+                                        <tr>
+                                            <td>${log.logTime}</td>
+                                            <td class="fw-bold text-danger">${log.username}</td>
+                                            <td>${log.action}</td>
+                                        </tr>
+                                    </c:forEach>
+                                    </tbody>
+                                </table>
+
+                                <c:if test="${totalLogPages > 1}">
+                                    <div class="p-2 bg-light border-top">
+                                        <ul class="pagination pagination-sm justify-content-end mb-0">
+                                            <li class="page-item ${currentLogPage == 1 ? 'disabled' : ''}">
+                                                <a class="page-link" href="account?page=${currentAccPage}&logPage=${currentLogPage - 1}">Log Trước</a>
+                                            </li>
+
+                                            <c:forEach begin="1" end="${totalLogPages}" var="j">
+                                                <c:if test="${j == 1 || j == totalLogPages || (j >= currentLogPage - 1 && j <= currentLogPage + 1)}">
+                                                    <li class="page-item ${currentLogPage == j ? 'active' : ''}">
+                                                        <a class="page-link" href="account?page=${currentAccPage}&logPage=${j}">${j}</a>
+                                                    </li>
+                                                </c:if>
+                                            </c:forEach>
+
+                                            <li class="page-item ${currentLogPage == totalLogPages ? 'disabled' : ''}">
+                                                <a class="page-link" href="account?page=${currentAccPage}&logPage=${currentLogPage + 1}">Log Sau</a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </c:if>
+                            </div>
+                        </div>
+                    </c:if>
                     </tbody>
                 </table>
             </div>

@@ -77,8 +77,45 @@ public class AccountServlet extends HttpServlet {
     }
 
     private void listAccounts(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        List<BankAccount> list = accountDAO.getAllAccounts();
+        // --- PHẦN 1: PHÂN TRANG TÀI KHOẢN (Param: "page") ---
+        int accPage = 1;
+        int accSize = 5;
+        if (request.getParameter("page") != null) {
+            try { accPage = Integer.parseInt(request.getParameter("page")); } catch (NumberFormatException e) {}
+        }
+        int totalAccounts = accountDAO.countTotalAccounts();
+        int totalAccPages = (int) Math.ceil((double) totalAccounts / accSize);
+        List<BankAccount> list = accountDAO.getAccountsByPage(accPage, accSize);
+
         request.setAttribute("listAccounts", list);
+        request.setAttribute("currentAccPage", accPage); // Đổi tên biến cho rõ
+        request.setAttribute("totalAccPages", totalAccPages);
+
+        // --- PHẦN 2: PHÂN TRANG LOG (Param: "logPage") ---
+        HttpSession session = request.getSession();
+        String role = (String) session.getAttribute("role");
+
+        // Mặc định logPage = 1
+        int logPage = 1;
+        int logSize = 5; // Số log mỗi trang
+        int totalLogPages = 0;
+
+        if ("ADMIN".equalsIgnoreCase(role)) {
+            // Chỉ xử lý nếu là Admin
+            if (request.getParameter("logPage") != null) {
+                try { logPage = Integer.parseInt(request.getParameter("logPage")); } catch (NumberFormatException e) {}
+            }
+
+            int totalLogs = accountDAO.countTotalLogs();
+            totalLogPages = (int) Math.ceil((double) totalLogs / logSize);
+
+            List<src.Entities.ActivityLog> logs = accountDAO.getLogsByPage(logPage, logSize);
+            request.setAttribute("systemLogs", logs);
+        }
+
+        request.setAttribute("currentLogPage", logPage);
+        request.setAttribute("totalLogPages", totalLogPages);
+
         request.getRequestDispatcher("/WEB-INF/views/dashboard.jsp").forward(request, response);
     }
 

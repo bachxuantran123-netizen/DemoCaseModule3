@@ -318,4 +318,108 @@ public class AccountDAO {
         }
         return null;
     }
+    public int countTotalAccounts() {
+        String sql = "SELECT COUNT(*) FROM Accounts";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    // 2. Lấy danh sách có phân trang (OFFSET - FETCH)
+    public List<BankAccount> getAccountsByPage(int pageIndex, int pageSize) {
+        List<BankAccount> list = new ArrayList<>();
+        // Công thức: Bỏ qua (page-1)*size dòng, lấy size dòng tiếp theo
+        int offset = (pageIndex - 1) * pageSize;
+
+        String sql = "SELECT a.*, c.full_name, c.citizen_id " +
+                "FROM Accounts a " +
+                "JOIN Customers c ON a.customer_id = c.customer_id " +
+                "ORDER BY a.creation_date DESC " + // Bắt buộc phải có ORDER BY mới dùng được OFFSET
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, offset);
+            ps.setInt(2, pageSize);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                list.add(mapRowToAccount(rs)); // Dùng lại hàm mapRowToAccount cũ của bạn
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    // 3. Lấy danh sách Log (Chỉ lấy 20 log mới nhất)
+    // Sửa lại hàm này trong AccountDAO.java
+    public List<src.Entities.ActivityLog> getRecentLogs() {
+        List<src.Entities.ActivityLog> logs = new ArrayList<>();
+
+        // Cập nhật SQL: Chọn rõ ràng các cột để tránh nhầm lẫn
+        String sql = "SELECT TOP 20 log_id, username, action, log_time FROM ActivityLogs ORDER BY log_time DESC";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                logs.add(new src.Entities.ActivityLog(
+                        rs.getInt("log_id"), // <-- SỬA CHỖ NÀY: Dùng "log_id" thay vì "id"
+                        rs.getString("username"),
+                        rs.getString("action"),
+                        rs.getTimestamp("log_time")
+                ));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return logs;
+    }
+    public int countTotalLogs() {
+        String sql = "SELECT COUNT(*) FROM ActivityLogs";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    // 2. Lấy Log có phân trang (Thay thế hàm getRecentLogs cũ)
+    public List<src.Entities.ActivityLog> getLogsByPage(int pageIndex, int pageSize) {
+        List<src.Entities.ActivityLog> logs = new ArrayList<>();
+        int offset = (pageIndex - 1) * pageSize;
+
+        // Lưu ý: Dùng "log_id" cho khớp với DB cũ của bạn
+        String sql = "SELECT log_id, username, action, log_time " +
+                "FROM ActivityLogs " +
+                "ORDER BY log_time DESC " +
+                "OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, offset);
+            ps.setInt(2, pageSize);
+
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                logs.add(new src.Entities.ActivityLog(
+                        rs.getInt("log_id"),
+                        rs.getString("username"),
+                        rs.getString("action"),
+                        rs.getTimestamp("log_time")
+                ));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return logs;
+    }
 }

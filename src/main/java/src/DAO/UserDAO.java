@@ -20,4 +20,16 @@ public class UserDAO {
             return false;
         }
     }
+    public String getUserRole(String username) {
+        String sql = "SELECT role FROM Users WHERE username = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) return rs.getString("role");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return "STAFF"; // Mặc định là nhân viên nếu lỗi
+    }
 }

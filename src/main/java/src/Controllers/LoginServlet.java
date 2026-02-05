@@ -23,6 +23,8 @@ public class LoginServlet extends HttpServlet {
         if (userDAO.checkLogin(u, p)) {
             HttpSession session = request.getSession();
             session.setAttribute("user", u);
+            String role = userDAO.getUserRole(u);
+            session.setAttribute("role", role);
             response.sendRedirect("account");
         } else {
             request.setAttribute("error", "Sai tài khoản hoặc mật khẩu!");
