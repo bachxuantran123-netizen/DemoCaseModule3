@@ -167,28 +167,17 @@
     </c:if>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <script>
-    function exportTableToExcel(tableID, filename = ''){
-        let downloadLink;
-        let dataType = 'application/vnd.ms-excel';
+    function exportTableToExcel(tableID, filename = 'Danh_Sach_Tai_Khoan'){
         let tableSelect = document.getElementById(tableID);
         let tableClone = tableSelect.cloneNode(true);
         let elementsToRemove = tableClone.querySelectorAll(".no-print");
         elementsToRemove.forEach(el => el.remove());
-        tableClone.style.border = '1px solid black';
-        let tableHTML = tableClone.outerHTML.replace(/ /g, '%20');
-        let htmlContent = '\uFEFF' + tableClone.outerHTML;
-        filename = filename ? filename + '.xls' : 'excel_data.xls';
-        downloadLink = document.createElement("a");
-        document.body.appendChild(downloadLink);
-        if(navigator.msSaveOrOpenBlob){
-            let blob = new Blob(['\ufeff', tableHTML], { type: dataType });
-            navigator.msSaveOrOpenBlob( blob, filename);
-        } else {
-            downloadLink.href = 'data:' + dataType + ', ' + htmlContent;
-            downloadLink.download = filename;
-            downloadLink.click();
-        }
+
+        let wb = XLSX.utils.table_to_book(tableClone, {sheet: "Data"});
+        XLSX.writeFile(wb, filename + '.xlsx');
     }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
