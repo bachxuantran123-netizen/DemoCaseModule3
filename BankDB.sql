@@ -4,17 +4,19 @@ GO
 CREATE TABLE Users (
     username VARCHAR(50) PRIMARY KEY,
     password VARCHAR(50) NOT NULL,
-    full_name NVARCHAR(100)
+    full_name NVARCHAR(100),
+    role VARCHAR(20) NOT NULL DEFAULT 'STAFF'
 );
-INSERT INTO Users VALUES ('admin', '123456', N'Nhân Viên');
-INSERT INTO Users VALUES ('admin1', '123456', N'Nhân Viên 1');
-INSERT INTO Users VALUES ('admin2', '123456', N'Nhân Viên 2');
+
+INSERT INTO Users (username, password, full_name, role) VALUES ('admin', '123456', N'Quản trị viên', 'ADMIN');
+INSERT INTO Users (username, password, full_name, role) VALUES ('admin1', '123456', N'Nhân Viên 1', 'STAFF');
+INSERT INTO Users (username, password, full_name, role) VALUES ('admin2', '123456', N'Nhân Viên 2', 'STAFF');
 GO
 
 CREATE TABLE Customers (
     customer_id INT IDENTITY(1,1) PRIMARY KEY,
     citizen_id VARCHAR(20) UNIQUE NOT NULL,
-    full_name NVARCHAR(100) NOT NULL,
+    full_name NVARCHAR(100) NOT NULL
 );
 GO
 
@@ -25,13 +27,13 @@ CREATE TABLE Accounts (
     creation_date DATE,
     type VARCHAR(20),
     
-    -- Savings
+    -- Savings 
     deposit_amount FLOAT,
     deposit_date DATE,
     interest_rate FLOAT,
     term INT,
     
-    -- Payment
+    -- Payment 
     card_number VARCHAR(20),
     balance FLOAT,
 
