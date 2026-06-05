@@ -44,7 +44,7 @@
         </form>
     </div>
     <div class="card-footer bg-transparent border-0 text-center mt-2">
-        <small class="text-muted">Module 3 Demo Case &copy; 2023</small>
+        <small class="text-muted">Nhóm 2 &copy; 2026</small>
     </div>
 </div>
 
